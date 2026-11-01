@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Messenger - WebRTC Test</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Tahoma, Arial, sans-serif;
+            background: linear-gradient(135deg, #dff3ff, #f8e5ff, #ffe5f0);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 720px;
+            background: rgba(255,255,255,0.95);
+            border-radius: 24px;
+            padding: 28px;
+            box-shadow: 0 15px 50px rgba(80,70,120,0.18);
+        }
+
+        h1 {
+            text-align: center;
+            color: #563d7c;
+            margin-top: 0;
+        }
+
+        .status {
+            text-align: center;
+            padding: 14px;
+            border-radius: 14px;
+            background: #f1edff;
+            color: #563d7c;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .connected {
+            background: #dcffe9;
+            color: #137333;
+        }
+
+        .failed {
+            background: #ffe1e1;
+            color: #b00020;
+        }
+
+        .section {
+            margin-top: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #444;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 130px;
+            resize: vertical;
+            border: 1px solid #ddd;
+            border-radius: 14px;
+            padding: 12px;
+            font-family: Consolas, monospace;
+            font-size: 13px;
+            direction: ltr;
+            background: #fafafa;
+        }
+
+        button {
+            border: 0;
+            border-radius: 12px;
+            padding: 12px 18px;
+            margin: 7px 4px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #7c83fd, #b46cff);
+            color: white;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .chat {
+            height: 250px;
+            overflow-y: auto;
+            background: #fafaff;
+            border: 1px solid #eee;
+            border-radius: 16px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .message {
+            padding: 9px 12px;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            background: #e9e4ff;
+            width: fit-content;
+            max-width: 85%;
+        }
+
+        .message.me {
+            background: #d9f3ff;
+            margin-right: auto;
+            margin-left: 0;
+        }
+
+        .message.other {
+            margin-left: auto;
+            margin-right: 0;
+        }
+
+        .send-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .send-row input {
+            flex: 1;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            padding: 12px;
+            font-size: 15px;
+        }
+
+        .debug {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 12px;
+            background: #f5f5f5;
+            direction: ltr;
+            text-align: left;
+            font-family: Consolas, monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+
+        .small {
+            color: #777;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>💬 My Messenger</h1>
+
+    <div id="status" class="status">
+        🔴 هنوز متصل نیست
+    </div>
+
+    <div class="section">
+
+        <label>مرحله ۱ — اتصال</label>
+
+        <button onclick="createOffer()">
+            👤 نفر اول: ساخت اتصال
+        </button>
+
+        <button onclick="createAnswer()">
+            👤 نفر دوم: پاسخ به اتصال
+        </button>
+
+    </div>
+
+    <div class="section">
+
+        <label>کد اتصال شما</label>
+
+        <textarea id="localCode" readonly></textarea>
+
+        <button onclick="copyLocalCode()">
+            📋 کپی کد
+        </button>
+
+    </div>
+
+    <div class="section">
+
+        <label>کد طرف مقابل</label>
+
+        <textarea
+            id="remoteCode"
+            placeholder="کد طرف مقابل را اینجا قرار بده..."
+        ></textarea>
+
+        <button onclick="applyRemoteCode()">
+            🔗 برقراری اتصال
+        </button>
+
+    </div>
+
+    <div class="section">
+
+        <label>پیام‌ها</label>
+
+        <div id="chat" class="chat"></div>
+
+        <div class="send-row">
+
+            <input
+                id="messageInput"
+                type="text"
+                placeholder="پیامت را بنویس..."
+                disabled
+                onkeydown="if(event.key === 'Enter') sendMessage()"
+            >
+
+            <button
+                id="sendButton"
+                onclick="sendMessage()"
+                disabled
+            >
+                ارسال
+            </button>
+
+        </div>
+
+    </div>
+
+    <div class="section">
+
+        <label>وضعیت فنی اتصال</label>
+
+        <div id="debug" class="debug">
+            آماده...
+        </div>
+
+    </div>
+
+    <p class="small">
+        نسخه آزمایشی WebRTC — پیام‌ها مستقیماً بین مرورگرها منتقل می‌شوند.
+    </p>
+
+</div>
+
+<script>
+
+let peerConnection = null;
+let dataChannel = null;
+
+const statusElement =
+    document.getElementById("status");
+
+const localCodeElement =
+    document.getElementById("localCode");
+
+const remoteCodeElement =
+    document.getElementById("remoteCode");
+
+const messageInput =
+    document.getElementById("messageInput");
+
+const sendButton =
+    document.getElementById("sendButton");
+
+const chatElement =
+    document.getElementById("chat");
+
+const debugElement =
+    document.getElementById("debug");
+
+
+/*
+    چند STUN Server
+*/
+const rtcConfig = {
+
+    iceServers: [
+
+        {
+            urls: "stun:stun.l.google.com:19302"
+        },
+
+        {
+            urls: "stun:stun1.l.google.com:19302"
+        },
+
+        {
+            urls: "stun:stun.cloudflare.com:3478"
+        }
+
+    ],
+
+    iceCandidatePoolSize: 10
+
+};
+
+
+/*
+    نمایش وضعیت فنی
+*/
+function debug(message) {
+
+    const time =
+        new Date().toLocaleTimeString();
+
+    debugElement.textContent +=
+        "\n[" + time + "] " + message;
+
+    debugElement.scrollTop =
+        debugElement.scrollHeight;
+}
+
+
+/*
+    ساخت PeerConnection
+*/
+function createPeerConnection() {
+
+    debug("ساخت RTCPeerConnection...");
+
+    peerConnection =
+        new RTCPeerConnection(rtcConfig);
+
+
+    /*
+        ICE Candidate
+    */
+    peerConnection.onicecandidate =
+        function(event) {
+
+            if (event.candidate) {
+
+                debug(
+                    "ICE candidate دریافت شد."
+                );
+
+            } else {
+
+                debug(
+                    "ICE gathering کامل شد."
+                );
+
+                localCodeElement.value =
+                    JSON.stringify(
+                        peerConnection.localDescription
+                    );
+            }
+        };
+
+
+    /*
+        وضعیت ICE
+    */
+    peerConnection.oniceconnectionstatechange =
+        function() {
+
+            const state =
+                peerConnection.iceConnectionState;
+
+            debug(
+                "ICE state: " + state
+            );
+
+            if (state === "connected" ||
+                state === "completed") {
+
+                setConnected();
+            }
+
+            if (state === "failed") {
+
+                setFailed(
+                    "ICE connection failed"
+                );
+            }
+        };
+
+
+    /*
+        وضعیت اصلی اتصال
+    */
+    peerConnection.onconnectionstatechange =
+        function() {
+
+            const state =
+                peerConnection.connectionState;
+
+            debug(
+                "Connection state: " + state
+            );
+
+            if (state === "connected") {
+
+                setConnected();
+            }
+
+            if (state === "failed") {
+
+                setFailed(
+                    "Peer connection failed"
+                );
+            }
+
+            if (state === "disconnected") {
+
+                statusElement.textContent =
+                    "🟠 اتصال موقتاً قطع شده";
+
+            }
+
+            if (state === "closed") {
+
+                statusElement.textContent =
+                    "🔴 اتصال بسته شد";
+
+            }
+        };
+
+
+    /*
+        دریافت DataChannel
+    */
+    peerConnection.ondatachannel =
+        function(event) {
+
+            debug(
+                "DataChannel دریافت شد."
+            );
+
+            setupDataChannel(
+                event.channel
+            );
+        };
+}
+
+
+/*
+    تنظیم DataChannel
+*/
+function setupDataChannel(channel) {
+
+    dataChannel = channel;
+
+    debug(
+        "تنظیم DataChannel..."
+    );
+
+
+    dataChannel.onopen =
+        function() {
+
+            debug(
+                "DataChannel باز شد."
+            );
+
+            setConnected();
+        };
+
+
+    dataChannel.onclose =
+        function() {
+
+            debug(
+                "DataChannel بسته شد."
+            );
+
+            statusElement.textContent =
+                "🔴 اتصال قطع شد";
+
+            statusElement.classList.remove(
+                "connected"
+            );
+
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+        };
+
+
+    dataChannel.onerror =
+        function(error) {
+
+            debug(
+                "DataChannel error"
+            );
+
+        };
+
+
+    dataChannel.onmessage =
+        function(event) {
+
+            addMessage(
+                event.data,
+                "other"
+            );
+        };
+}
+
+
+/*
+    اتصال موفق
+*/
+function setConnected() {
+
+    statusElement.textContent =
+        "🟢 اتصال برقرار شد";
+
+    statusElement.classList.remove(
+        "failed"
+    );
+
+    statusElement.classList.add(
+        "connected"
+    );
+
+    messageInput.disabled = false;
+    sendButton.disabled = false;
+
+}
+
+
+/*
+    اتصال ناموفق
+*/
+function setFailed(reason) {
+
+    statusElement.textContent =
+        "🔴 اتصال برقرار نشد";
+
+    statusElement.classList.remove(
+        "connected"
+    );
+
+    statusElement.classList.add(
+        "failed"
+    );
+
+    messageInput.disabled = true;
+    sendButton.disabled = true;
+
+    debug(
+        "ERROR: " + reason
+    );
+}
+
+
+/*
+    صبر برای کامل شدن ICE
+*/
+function waitForIceGatheringComplete() {
+
+    return new Promise(function(resolve) {
+
+        if (
+            peerConnection.iceGatheringState ===
+            "complete"
+        ) {
+
+            resolve();
+            return;
+        }
+
+
+        function checkState() {
+
+            if (
+                peerConnection.iceGatheringState ===
+                "complete"
+            ) {
+
+                peerConnection.removeEventListener(
+                    "icegatheringstatechange",
+                    checkState
+                );
+
+                resolve();
+            }
+        }
+
+
+        peerConnection.addEventListener(
+            "icegatheringstatechange",
+            checkState
+        );
+
+    });
+
+}
+
+
+/*
+    نفر اول
+*/
+async function createOffer() {
+
+    debug(
+        "در حال ساخت Offer..."
+    );
+
+    createPeerConnection();
+
+
+    const channel =
+        peerConnection.createDataChannel(
+            "chat"
+        );
+
+
+    setupDataChannel(channel);
+
+
+    const offer =
+        await peerConnection.createOffer();
+
+
+    await peerConnection.setLocalDescription(
+        offer
+    );
+
+
+    statusElement.textContent =
+        "🟡 در حال آماده‌سازی کد اتصال...";
+
+
+    await waitForIceGatheringComplete();
+
+
+    localCodeElement.value =
+        JSON.stringify(
+            peerConnection.localDescription
+        );
+
+
+    statusElement.textContent =
+        "🟡 کد آماده است؛ آن را برای نفر دوم بفرست.";
+
+
+    debug(
+        "Offer آماده شد."
+    );
+}
+
+
+/*
+    نفر دوم
+*/
+async function createAnswer() {
+
+    if (!remoteCodeElement.value.trim()) {
+
+        alert(
+            "ابتدا کد نفر اول را وارد کن."
+        );
+
+        return;
+    }
+
+
+    debug(
+        "در حال ساخت Answer..."
+    );
+
+
+    createPeerConnection();
+
+
+    const offer =
+        JSON.parse(
+            remoteCodeElement.value
+        );
+
+
+    await peerConnection.setRemoteDescription(
+        offer
+    );
+
+
+    debug(
+        "Offer دریافت و ثبت شد."
+    );
+
+
+    const answer =
+        await peerConnection.createAnswer();
+
+
+    await peerConnection.setLocalDescription(
+        answer
+    );
+
+
+    statusElement.textContent =
+        "🟡 در حال آماده‌سازی پاسخ...";
+
+
+    await waitForIceGatheringComplete();
+
+
+    localCodeElement.value =
+        JSON.stringify(
+            peerConnection.localDescription
+        );
+
+
+    statusElement.textContent =
+        "🟡 پاسخ آماده است؛ آن را برای نفر اول بفرست.";
+
+
+    debug(
+        "Answer آماده شد."
+    );
+}
+
+
+/*
+    وارد کردن پاسخ نفر دوم
+*/
+async function applyRemoteCode() {
+
+    if (!peerConnection) {
+
+        alert(
+            "ابتدا اتصال را بساز."
+        );
+
+        return;
+    }
+
+
+    if (!remoteCodeElement.value.trim()) {
+
+        alert(
+            "کد طرف مقابل را وارد کن."
+        );
+
+        return;
+    }
+
+
+    try {
+
+        const remoteDescription =
+            JSON.parse(
+                remoteCodeElement.value
+            );
+
+
+        debug(
+            "در حال ثبت کد طرف مقابل..."
+        );
+
+
+        await peerConnection.setRemoteDescription(
+            remoteDescription
+        );
+
+
+        statusElement.textContent =
+            "🟡 در حال برقراری اتصال...";
+
+
+        debug(
+            "کد طرف مقابل ثبت شد."
+        );
+
+    } catch(error) {
+
+        debug(
+            "ERROR: " + error.message
+        );
+
+        alert(
+            "کد واردشده معتبر نیست."
+        );
+    }
+}
+
+
+/*
+    ارسال پیام
+*/
+function sendMessage() {
+
+    const text =
+        messageInput.value.trim();
+
+
+    if (!text) {
+        return;
+    }
+
+
+    if (
+        !dataChannel ||
+        dataChannel.readyState !== "open"
+    ) {
+
+        alert(
+            "هنوز اتصال برقرار نشده است."
+        );
+
+        return;
+    }
+
+
+    dataChannel.send(text);
+
+
+    addMessage(
+        text,
+        "me"
+    );
+
+
+    messageInput.value = "";
+}
+
+
+/*
+    نمایش پیام
+*/
+function addMessage(text, type) {
+
+    const message =
+        document.createElement("div");
+
+
+    message.className =
+        "message " + type;
+
+
+    message.textContent =
+        text;
+
+
+    chatElement.appendChild(
+        message
+    );
+
+
+    chatElement.scrollTop =
+        chatElement.scrollHeight;
+}
+
+
+/*
+    کپی کد
+*/
+async function copyLocalCode() {
+
+    if (!localCodeElement.value) {
+
+        alert(
+            "هنوز کدی ساخته نشده است."
+        );
+
+        return;
+    }
+
+
+    await navigator.clipboard.writeText(
+        localCodeElement.value
+    );
+
+
+    alert(
+        "کد کپی شد."
+    );
+}
+
+</script>
+
+</body>
+</html>
